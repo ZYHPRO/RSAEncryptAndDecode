@@ -13,10 +13,10 @@ uses SysUtils, Dialogs, Classes, Controls, StdCtrls, libeay32,EncdDecd_suman;
 
 type
   TRSAData = packed record
-    DecryptedData: string;
-    CryptedData: string;
+    DecryptedData: AnsiString;
+    CryptedData: AnsiString;
     ErrorResult: integer;
-    ErrorMessage: string;
+    ErrorMessage: AnsiString;
   end;
 
 type
@@ -299,6 +299,7 @@ begin
   end;
   RSA_free(rsa);
   FreeSSL;
+  FreeMem(FCryptedBuffer);
 end;
 
 
@@ -363,6 +364,8 @@ begin
   end;
   RSA_free(rsa);
   FreeSSL;
+  FreeMem(data);
+  FreeMem(str);
 end;
 
 procedure TRSAOpenSSL.PrivateEncrypt11(var aRSAData: TRSAData);
@@ -431,6 +434,7 @@ begin
     until err = 0;
   end;
   RSA_free(rsa);
+  FreeMem(FCryptedBuffer);
 end;
 
 
@@ -492,6 +496,8 @@ begin
     until err = 0;
   end;
   RSA_free(rsa);
+  FreeMem(data);
+  FreeMem(str);
 end;
 
 
