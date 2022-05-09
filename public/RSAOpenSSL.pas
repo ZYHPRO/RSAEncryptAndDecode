@@ -257,7 +257,7 @@ begin
 
 
   rsa := EVP_PKEY_get1_RSA(FPublicKey);
-  EVP_PKEY_free(FPublicKey);
+  //EVP_PKEY_free(FPublicKey);
 
   size := RSA_size(rsa);
 
@@ -393,7 +393,7 @@ begin
 
 
   rsa := EVP_PKEY_get1_RSA(FPrivateKey);
-  EVP_PKEY_free(FPrivateKey);
+  //EVP_PKEY_free(FPrivateKey);
 
   size := RSA_size(rsa);
 

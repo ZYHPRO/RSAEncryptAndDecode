@@ -55,6 +55,7 @@ type
     procedure Button9Click(Sender: TObject);
     procedure Button7Click(Sender: TObject);
     procedure Button10Click(Sender: TObject);
+    procedure FormClose(Sender: TObject; var Action: TCloseAction);
   private
     { Private declarations }
     fRSAOpenSSL : TRSAOpenSSL;
@@ -69,6 +70,11 @@ implementation
 
 
 {$R *.dfm}
+
+procedure TForm1.FormClose(Sender: TObject; var Action: TCloseAction);
+begin
+  fRSAOpenSSL.Free;
+end;
 
 procedure TForm1.FormCreate(Sender: TObject);
 var
