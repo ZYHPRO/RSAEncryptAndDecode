@@ -235,36 +235,83 @@ end;
 procedure TRSAOpenSSL.PublickEncrypt(var aRSAData: TRSAData);
 var
   rsa: pRSA;
-  str, data: AnsiString;
+  str, data, str_do, Str_tobase64 : AnsiString;
   len, b64len: Integer;
   penc64: PAnsiChar;
   b64, mem: pBIO;
   size: Integer;
   err: Cardinal;
+  Arr_btmp : TBytes;
 begin
   LoadSSL;
-  FPublicKey := LoadPublicKey(fPublicKeyPath);
-
   if FPublicKey = nil then
   begin
-    err := ERR_get_error;
-    repeat
-      aRSAData.ErrorMessage:= aRSAData.ErrorMessage + string(ERR_error_string(err, nil)) + #10;
-      err := ERR_get_error;
-    until err = 0;
-    exit;
-  end;
+    FPublicKey := LoadPublicKey(fPublicKeyPath);
 
+    if FPublicKey = nil then
+    begin
+      err := ERR_get_error;
+      repeat
+        aRSAData.ErrorMessage:= aRSAData.ErrorMessage + string(ERR_error_string(err, nil)) + #13#10;
+        err := ERR_get_error;
+      until err = 0;
+      exit;
+    end;
+  end;
 
   rsa := EVP_PKEY_get1_RSA(FPublicKey);
   //EVP_PKEY_free(FPublicKey);
 
   size := RSA_size(rsa);
 
-  GetMem(FCryptedBuffer, size);
+  //GetMem(FCryptedBuffer, size);
   str := AnsiString(aRSAData.DecryptedData);
 
-  len := RSA_public_encrypt(Length(str), PAnsiChar(str), FCryptedBuffer, rsa, RSA_PKCS1_PADDING);
+  b64len := 0;
+  while Length(str)>0 do
+  begin
+    str_do := Copy(str,1,size-11);
+    Delete(str,1,size-11);
+    SetLength(Arr_btmp,Length(Arr_btmp)+size);
+    len := RSA_public_encrypt(Length(str_do), PAnsiChar(str_do), @Arr_btmp[Length(Arr_btmp)-size], rsa, RSA_PKCS1_PADDING);
+
+    if len > 0 then
+    begin
+      aRSAData.ErrorResult:= 0;
+      b64len := b64len + len;
+    end
+    else
+    begin
+      err := ERR_get_error;
+      aRSAData.ErrorResult := -1;
+      repeat
+        aRSAData.ErrorMessage:= aRSAData.ErrorMessage + AnsiString(ERR_error_string(err, nil)) + #13#10;
+        err := ERR_get_error;
+      until err = 0;
+      Break;
+    end;
+  end;
+  if len > 0 then
+  begin
+    b64 := BIO_new(BIO_f_base64);
+    mem := BIO_push(b64, BIO_new(BIO_s_mem));
+    try
+      //encode data to base64
+      BIO_write(mem, @Arr_btmp[0], b64len);
+      BIO_flush(mem);
+      b64len := BIO_get_mem_data(mem, penc64);
+
+      //copy data to string
+      SetLength(data, b64len);
+      Move(penc64^, PAnsiChar(data)^, b64len);
+      aRSAData.ErrorMessage := 'String has been crypted, then base64 encoded.' + #13#10;
+      aRSAData.CryptedData := AnsiString(data);
+    finally
+      BIO_free_all(mem);
+    end;
+  end;
+
+  {len := RSA_public_encrypt(Length(str), PAnsiChar(str), FCryptedBuffer, rsa, RSA_PKCS1_PADDING);
 
   if len > 0 then
   begin
@@ -281,7 +328,7 @@ begin
       //copy data to string
       SetLength(data, b64len);
       Move(penc64^, PAnsiChar(data)^, b64len);
-      aRSAData.ErrorMessage := 'String has been crypted, then base64 encoded.' + #10;
+      aRSAData.ErrorMessage := 'String has been crypted, then base64 encoded.' + #13#10;
       aRSAData.CryptedData:= string(data);
     finally
       BIO_free_all(mem);
@@ -293,13 +340,15 @@ begin
     err := ERR_get_error;
     aRSAData.ErrorResult := -1;
     repeat
-      aRSAData.ErrorMessage:= aRSAData.ErrorMessage + string(ERR_error_string(err, nil)) + #10;
+      aRSAData.ErrorMessage:= aRSAData.ErrorMessage + string(ERR_error_string(err, nil)) + #13#10;
       err := ERR_get_error;
     until err = 0;
-  end;
+  end;    //}
+
+
+  //FreeMem(FCryptedBuffer);
   RSA_free(rsa);
   FreeSSL;
-  FreeMem(FCryptedBuffer);
 end;
 
 
@@ -310,47 +359,90 @@ var
 
   rsa_derypted: pointer;
   out_: AnsiString;
-  str, data: PAnsiChar;
+  //str, data: PAnsiChar;
   len, b64len: Integer;
   penc64: PAnsiChar;
   b64, mem, bio_out, bio: pBIO;
-  size: Integer;
+  size, icount : Integer;
   err: Cardinal;
+  Arr_s, Arr_btmp : TBytes;
+//  str_do, Str_tmp : ansistring;
 begin
   LoadSSL;
-  FPrivateKey := LoadPrivateKey(fPrivateKeyPath);
-  //FPrivateKey := LoadPrivateKeyFromString(''); // Load PrivateKey from including ansistring;
   if FPrivateKey = nil then
   begin
-    err := ERR_get_error;
-    repeat
-      aRSAData.ErrorMessage:= aRSAData.ErrorMessage + string(ERR_error_string(err, nil)) + #10;
+    FPrivateKey := LoadPrivateKey(fPrivateKeyPath);
+    //FPrivateKey := LoadPrivateKeyFromString(''); // Load PrivateKey from including ansistring;
+    if FPrivateKey = nil then
+    begin
       err := ERR_get_error;
-    until err = 0;
-    exit;
+      repeat
+        aRSAData.ErrorMessage:= aRSAData.ErrorMessage + AnsiString(ERR_error_string(err, nil)) + #13#10;
+        err := ERR_get_error;
+      until err = 0;
+      exit;
+    end;
   end;
+
   rsa := EVP_PKEY_get1_RSA(FPrivateKey);
   size := RSA_size(rsa);
 
 
-  GetMem(data, size);
-  GetMem(str, size);
+  //GetMem(data, size);
+  //GetMem(str, size);
+  SetLength(Arr_s,Length(aRSAData.CryptedData));
 
   b64 := BIO_new(BIO_f_base64);
   mem := BIO_new_mem_buf(PAnsiChar(aRSAData.CryptedData), Length(aRSAData.CryptedData));
   BIO_flush(mem);
   mem := BIO_push(b64, mem);
-  BIO_read(mem, str , Length(aRSAData.CryptedData));
+  //len := BIO_read(mem, str , Length(aRSAData.CryptedData));
+  len := BIO_read(mem, @Arr_s[0] , Length(aRSAData.CryptedData));
+
   BIO_free_all(mem);
 
-  len := RSA_private_decrypt(size, PAnsiChar(str), data, rsa, RSA_PKCS1_PADDING);
+
+  b64len := 0;   icount := 0;
+  SetLength(Arr_btmp,len);
+
+  while (icount*size)<Length(Arr_btmp) do
+  begin
+    len := RSA_private_decrypt(size, @Arr_s[icount*size], @Arr_btmp[b64len], rsa, RSA_PKCS1_PADDING);
+    Inc(icount);
+
+    if len > 0 then
+    begin
+      aRSAData.ErrorResult:= 0;
+      b64len := b64len + len;
+    end
+    else
+    begin
+      err := ERR_get_error;
+      aRSAData.ErrorResult := -1;
+      repeat
+        aRSAData.ErrorMessage:= aRSAData.ErrorMessage + AnsiString(ERR_error_string(err, nil)) + #13#10;
+        err := ERR_get_error;
+      until err = 0;
+      Break;
+    end;
+  end;
+  if len > 0 then
+  begin
+    SetLength(out_, b64len);
+    Move(Arr_btmp[0], PAnsiChar(out_ )^, b64len);
+    aRSAData.ErrorResult := 0;
+    aRSAData.ErrorMessage := 'Base64 has been decoded and decrypted' + #13#10;
+    aRSAData.DecryptedData := out_;
+  end;
+
+  {len := RSA_private_decrypt(size, PAnsiChar(str), data, rsa, RSA_PKCS1_PADDING);
 
   if len > 0 then
   begin
     SetLength(out_, len);
     Move(data^, PAnsiChar(out_ )^, len);
     aRSAData.ErrorResult := 0;
-    aRSAData.ErrorMessage := 'Base64 has been decoded and decrypted' + #10;
+    aRSAData.ErrorMessage := 'Base64 has been decoded and decrypted' + #13#10;
     aRSAData.DecryptedData := out_;
   end
   else
@@ -358,14 +450,15 @@ begin
     err := ERR_get_error;
     aRSAData.ErrorResult := -1;
     repeat
-      aRSAData.ErrorMessage:= aRSAData.ErrorMessage + string(ERR_error_string(err, nil)) + #10;
+      aRSAData.ErrorMessage:= aRSAData.ErrorMessage + string(ERR_error_string(err, nil)) + #13#10;
       err := ERR_get_error;
     until err = 0;
-  end;
+  end;  //}
+
+//  FreeMem(data);
+  //FreeMem(str);
   RSA_free(rsa);
   FreeSSL;
-  FreeMem(data);
-  FreeMem(str);
 end;
 
 procedure TRSAOpenSSL.PrivateEncrypt11(var aRSAData: TRSAData);
